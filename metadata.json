@@ -1,0 +1,6 @@
+{
+  "name": "Generator Bhs Jawa",
+  "description": "Generator perangkat pembelajaran Bahasa Jawa lengkap: Analisis CP, ATP, Alokasi Waktu, KKTP, Prota/Promes, Jurnal Mengajar, Modul Ajar Deep Learning SOLO, Materi Ajar, LKPD, Soal Formatif/Sumatif, dan Format Penilaian dengan fitur import & download multi-format.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
