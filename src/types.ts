@@ -288,10 +288,28 @@ export interface PenilaianInstrument {
   catatan: string;
 }
 
+export interface CpProfileEntry {
+  cpElements: CpElement[];
+  tpRows: TpRow[];
+  enrichedItems?: Array<{
+    lingkupMateri?: string;
+    dimensiProfilLulusan?: string[];
+    waktuJp?: number;
+    kktp?: {
+      kodeTp?: string;
+      perluBimbingan?: string;
+      cukup?: string;
+      baik?: string;
+      sangatBaik?: string;
+    };
+  }>;
+}
+
 export interface AppState {
   identitas: IdentitasSekolah;
   cpElements: CpElement[];
   tpRows: TpRow[];
+  cpLibrary?: Record<string, CpProfileEntry>;
   atpRows: AtpRow[];
   alokasiWaktu: AlokasiWaktuState;
   kktpRows: KktpRow[];

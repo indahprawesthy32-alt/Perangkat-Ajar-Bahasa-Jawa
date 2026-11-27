@@ -1,18 +1,19 @@
 import { X } from 'lucide-react';
 import type { IdentitasSekolah } from '../types';
+import { normalizeFase, normalizeKelas } from '../utils/curriculumSync';
 
 interface Props {
   open: boolean;
   identitas: IdentitasSekolah;
   onClose: () => void;
-  onChange: (next: IdentitasSekolah) => void;
+  onPatch: (patch: Partial<IdentitasSekolah>) => void;
 }
 
-export function IdentitasModal({ open, identitas, onClose, onChange }: Props) {
+export function IdentitasModal({ open, identitas, onClose, onPatch }: Props) {
   if (!open) return null;
 
   const update = (key: keyof IdentitasSekolah, val: string) => {
-    onChange({ ...identitas, [key]: val });
+    onPatch({ [key]: val });
   };
 
   return (
@@ -22,7 +23,7 @@ export function IdentitasModal({ open, identitas, onClose, onChange }: Props) {
           <div>
             <h3 className="font-display text-lg font-bold text-slate-900">Identitas Satuan Pendidikan &amp; Guru</h3>
             <p className="text-xs text-slate-600">
-              Perubahan identitas otomatis diterapkan ke seluruh 11 dokumen perangkat ajar.
+              Perubahan Fase/Kelas otomatis menyesuaikan Materi, Elemen, CP, TP, hingga Format Penilaian di seluruh 11 menu.
             </p>
           </div>
           <button
@@ -54,32 +55,31 @@ export function IdentitasModal({ open, identitas, onClose, onChange }: Props) {
             />
           </div>
           <div>
-            <label className="block font-medium text-slate-700 mb-1">Fase</label>
-            <input
-              type="text"
-              list="fase-options"
-              value={identitas.fase}
+            <label className="block font-medium text-slate-700 mb-1">Fase (Pilih A / B / C)</label>
+            <select
+              value={normalizeFase(identitas.fase)}
               onChange={(e) => update('fase', e.target.value)}
-              placeholder="Contoh: C (atau Fase C)"
               className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm bg-white"
-            />
-            <datalist id="fase-options">
+            >
               <option value="A">Fase A (Kelas 1–2)</option>
               <option value="B">Fase B (Kelas 3–4)</option>
               <option value="C">Fase C (Kelas 5–6)</option>
-              <option value="D">Fase D (Kelas 7–9)</option>
-              <option value="E">Fase E (Kelas 10)</option>
-              <option value="F">Fase F (Kelas 11–12)</option>
-            </datalist>
+            </select>
           </div>
           <div>
-            <label className="block font-medium text-slate-700 mb-1">Kelas</label>
-            <input
-              type="text"
-              value={identitas.kelas}
+            <label className="block font-medium text-slate-700 mb-1">Kelas (Pilih 1–6)</label>
+            <select
+              value={normalizeKelas(identitas.kelas)}
               onChange={(e) => update('kelas', e.target.value)}
-              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm"
-            />
+              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm bg-white"
+            >
+              <option value="1">Kelas 1 (Fase A)</option>
+              <option value="2">Kelas 2 (Fase A)</option>
+              <option value="3">Kelas 3 (Fase B)</option>
+              <option value="4">Kelas 4 (Fase B)</option>
+              <option value="5">Kelas 5 (Fase C)</option>
+              <option value="6">Kelas 6 (Fase C)</option>
+            </select>
           </div>
           <div>
             <label className="block font-medium text-slate-700 mb-1">Semester Aktif</label>
@@ -96,11 +96,12 @@ export function IdentitasModal({ open, identitas, onClose, onChange }: Props) {
             </datalist>
           </div>
           <div>
-            <label className="block font-medium text-slate-700 mb-1">Tahun Pelajaran</label>
+            <label className="block font-medium text-slate-700 mb-1">Tahun Pelajaran (Ketik Manual)</label>
             <input
               type="text"
               value={identitas.tahunPelajaran}
               onChange={(e) => update('tahunPelajaran', e.target.value)}
+              placeholder="Contoh: 2026/2027"
               className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm font-mono"
             />
           </div>

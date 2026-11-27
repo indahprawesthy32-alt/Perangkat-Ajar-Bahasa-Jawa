@@ -4,6 +4,7 @@ import type { AtpRow, IdentitasSekolah, LkpdState, TpRow } from '../types';
 import { generateWithAi } from '../utils/apiClient';
 import { parseAnyUploadedFile } from '../utils/fileEngine';
 import { useIdentitas } from '../context/IdentitasContext';
+import { normalizeFase, normalizeKelas } from '../utils/curriculumSync';
 
 interface Props {
   identitas: IdentitasSekolah;
@@ -179,22 +180,33 @@ export function Menu9Lkpd({ identitas, lkpd, tpRows, atpRows, onChange }: Props)
                 <span>·</span>
                 <label className="inline-flex items-center gap-1">
                   <span>Kelas</span>
-                  <input
-                    type="text"
-                    value={ctx.identitas.kelas}
+                  <select
+                    aria-label="Kelas"
+                    value={normalizeKelas(ctx.identitas.kelas)}
                     onChange={(e) => ctx.updateIdentitas({ kelas: e.target.value })}
-                    className="w-10 bg-transparent border-b border-slate-300 focus:border-[#1B4353] focus:outline-none text-center font-medium text-slate-800 print:border-none"
-                  />
+                    className="bg-transparent border-b border-slate-300 focus:border-[#1B4353] focus:outline-none text-center font-medium text-slate-800 cursor-pointer print:appearance-none print:border-none"
+                  >
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                    <option value="6">6</option>
+                  </select>
                 </label>
                 <span>·</span>
                 <label className="inline-flex items-center gap-1">
                   <span>Fase</span>
-                  <input
-                    type="text"
-                    value={ctx.identitas.fase}
+                  <select
+                    aria-label="Fase"
+                    value={normalizeFase(ctx.identitas.fase)}
                     onChange={(e) => ctx.updateIdentitas({ fase: e.target.value })}
-                    className="w-10 bg-transparent border-b border-slate-300 focus:border-[#1B4353] focus:outline-none text-center font-medium text-slate-800 print:border-none"
-                  />
+                    className="bg-transparent border-b border-slate-300 focus:border-[#1B4353] focus:outline-none text-center font-medium text-slate-800 cursor-pointer print:appearance-none print:border-none"
+                  >
+                    <option value="A">A</option>
+                    <option value="B">B</option>
+                    <option value="C">C</option>
+                  </select>
                 </label>
                 <span>·</span>
                 <input

@@ -2,7 +2,8 @@ import { useRef, useState } from 'react';
 import { Plus, Trash2, Sparkles, Loader2, Upload, RefreshCw } from 'lucide-react';
 import type { AppState, CpElement, IdentitasSekolah, TpRow } from '../types';
 import { generateWithAi } from '../utils/apiClient';
-import { cascadeAllMenusFromCpTp, importCpTpFileAndCascade } from '../utils/curriculumSync';
+import { cascadeAllMenusFromCpTp, importCpTpFileAndCascade, normalizeFase, normalizeKelas } from '../utils/curriculumSync';
+import { useIdentitas } from '../context/IdentitasContext';
 import { DocumentHeader, SignatureBlock } from './DocumentHeader';
 
 interface Props {
@@ -24,10 +25,14 @@ export function Menu1AnalisisCp({
   onChangeTp,
   onUpdateFullState,
 }: Props) {
+  const ctx = useIdentitas();
   const [loadingAi, setLoadingAi] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+
+  const activeFase = normalizeFase(identitas.fase);
+  const activeKelas = normalizeKelas(identitas.kelas);
 
   const handleAddCp = () => {
     onChangeCp([
@@ -167,6 +172,48 @@ export function Menu1AnalisisCp({
             {loadingAi ? 'Memproses CP/TP...' : 'Turunkan CP ke TP (AI)'}
           </button>
         </div>
+
+        {ctx && (
+          <div className="w-full pt-3 mt-1 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] font-medium text-slate-600">Tahun Ajaran (Ketik Manual)</span>
+              <input
+                type="text"
+                value={identitas.tahunPelajaran}
+                onChange={(e) => ctx.updateIdentitas({ tahunPelajaran: e.target.value })}
+                placeholder="Contoh: 2026/2027"
+                className="w-full font-mono font-medium border border-slate-300 rounded-md px-2.5 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-[#1B4353]"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] font-medium text-slate-600">Pilih Fase (A / B / C)</span>
+              <select
+                value={activeFase}
+                onChange={(e) => ctx.updateIdentitas({ fase: e.target.value })}
+                className="w-full font-medium border border-slate-300 rounded-md px-2.5 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-[#1B4353]"
+              >
+                <option value="A">Fase A (Kelas 1–2)</option>
+                <option value="B">Fase B (Kelas 3–4)</option>
+                <option value="C">Fase C (Kelas 5–6)</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] font-medium text-slate-600">Pilih Kelas (1–6)</span>
+              <select
+                value={activeKelas}
+                onChange={(e) => ctx.updateIdentitas({ kelas: e.target.value })}
+                className="w-full font-medium border border-slate-300 rounded-md px-2.5 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-[#1B4353]"
+              >
+                <option value="1">Kelas 1 (Fase A)</option>
+                <option value="2">Kelas 2 (Fase A)</option>
+                <option value="3">Kelas 3 (Fase B)</option>
+                <option value="4">Kelas 4 (Fase B)</option>
+                <option value="5">Kelas 5 (Fase C)</option>
+                <option value="6">Kelas 6 (Fase C)</option>
+              </select>
+            </label>
+          </div>
+        )}
       </div>
 
       {statusMsg && (
@@ -214,9 +261,16 @@ export function Menu1AnalisisCp({
                         type="text"
                         value={item.elemen}
                         onChange={(e) => {
-                          const next = [...cpElements];
-                          next[idx] = { ...item, elemen: e.target.value };
-                          onChangeCp(next);
+                          const prevEl = item.elemen.trim().toLowerCase();
+                          const newEl = e.target.value;
+                          const nextCp = [...cpElements];
+                          nextCp[idx] = { ...item, elemen: newEl };
+                          const nextTp = tpRows.map((row) =>
+                            row.elemen.trim().toLowerCase() === prevEl ? { ...row, elemen: newEl } : row,
+                          );
+                          onUpdateFullState(
+                            cascadeAllMenusFromCpTp(fullState, nextCp, nextTp, undefined, undefined, undefined, true),
+                          );
                         }}
                         className="w-full bg-transparent text-slate-900 font-medium text-sm focus:outline-none focus:ring-1 focus:ring-[#1B4353] rounded px-1.5 py-1"
                       />
@@ -226,9 +280,16 @@ export function Menu1AnalisisCp({
                         rows={2}
                         value={item.capaianPembelajaran}
                         onChange={(e) => {
-                          const next = [...cpElements];
-                          next[idx] = { ...item, capaianPembelajaran: e.target.value };
-                          onChangeCp(next);
+                          const elKey = item.elemen.trim().toLowerCase();
+                          const newCpText = e.target.value;
+                          const nextCp = [...cpElements];
+                          nextCp[idx] = { ...item, capaianPembelajaran: newCpText };
+                          const nextTp = tpRows.map((row) =>
+                            row.elemen.trim().toLowerCase() === elKey ? { ...row, cp: newCpText } : row,
+                          );
+                          onUpdateFullState(
+                            cascadeAllMenusFromCpTp(fullState, nextCp, nextTp, undefined, undefined, undefined, true),
+                          );
                         }}
                         className="w-full bg-transparent text-slate-700 text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-[#1B4353] rounded px-1.5 py-1 resize-y"
                       />

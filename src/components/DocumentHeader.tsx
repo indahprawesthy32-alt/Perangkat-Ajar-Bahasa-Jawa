@@ -1,5 +1,6 @@
 import type { IdentitasSekolah } from '../types';
 import { useIdentitas } from '../context/IdentitasContext';
+import { normalizeFase, normalizeKelas } from '../utils/curriculumSync';
 
 interface DocumentHeaderProps {
   title: string;
@@ -48,30 +49,40 @@ export function DocumentHeader({ title, subtitle, fields }: DocumentHeaderProps)
               type="text"
               value={ctx.identitas.tahunPelajaran}
               onChange={(e) => ctx.updateIdentitas({ tahunPelajaran: e.target.value })}
+              placeholder="Contoh: 2026/2027"
               className="w-full min-w-0 font-mono font-semibold text-slate-900 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-[#1B4353] focus:bg-white focus:outline-none px-1 py-0.5 rounded-t print:border-none"
             />
           </label>
           <label className="flex items-center gap-2">
             <span className="w-28 shrink-0 font-medium text-slate-600">Kelas</span>
             <span className="text-slate-400">:</span>
-            <input
-              type="text"
-              value={ctx.identitas.kelas}
+            <select
+              aria-label="Kelas"
+              value={normalizeKelas(ctx.identitas.kelas)}
               onChange={(e) => ctx.updateIdentitas({ kelas: e.target.value })}
-              placeholder="Contoh: 5"
-              className="w-full min-w-0 font-semibold text-slate-900 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-[#1B4353] focus:bg-white focus:outline-none px-1 py-0.5 rounded-t print:border-none"
-            />
+              className="w-full min-w-0 font-semibold text-slate-900 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-[#1B4353] focus:bg-white focus:outline-none px-1 py-0.5 rounded-t cursor-pointer print:appearance-none print:border-none"
+            >
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+              <option value="6">6</option>
+            </select>
           </label>
           <label className="flex items-center gap-2">
             <span className="w-28 shrink-0 font-medium text-slate-600">Fase</span>
             <span className="text-slate-400">:</span>
-            <input
-              type="text"
-              value={ctx.identitas.fase}
+            <select
+              aria-label="Fase"
+              value={normalizeFase(ctx.identitas.fase)}
               onChange={(e) => ctx.updateIdentitas({ fase: e.target.value })}
-              placeholder="A / B / C / D / E / F"
-              className="w-full min-w-0 font-semibold text-slate-900 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-[#1B4353] focus:bg-white focus:outline-none px-1 py-0.5 rounded-t print:border-none"
-            />
+              className="w-full min-w-0 font-semibold text-slate-900 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-[#1B4353] focus:bg-white focus:outline-none px-1 py-0.5 rounded-t cursor-pointer print:appearance-none print:border-none"
+            >
+              <option value="A">A (Kelas 1–2)</option>
+              <option value="B">B (Kelas 3–4)</option>
+              <option value="C">C (Kelas 5–6)</option>
+            </select>
           </label>
           <label className="flex items-center gap-2">
             <span className="w-28 shrink-0 font-medium text-slate-600">Semester</span>

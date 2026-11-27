@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, Sparkles, Trash2, Loader2 } from 'lucide-react';
 import type { IdentitasSekolah, PenilaianInstrument } from '../types';
 import { generateWithAi } from '../utils/apiClient';
@@ -7,14 +7,21 @@ import { DocumentHeader, SignatureBlock } from './DocumentHeader';
 interface Props {
   identitas: IdentitasSekolah;
   penilaianList: PenilaianInstrument[];
+  activeMateri?: string;
   onChange: (next: PenilaianInstrument[]) => void;
 }
 
-export function Menu11Penilaian({ identitas, penilaianList, onChange }: Props) {
+export function Menu11Penilaian({ identitas, penilaianList, activeMateri, onChange }: Props) {
   const [selectedId, setSelectedId] = useState<string>(penilaianList[0]?.id || 'rubrik_lkpd');
-  const [materiTopik, setMateriTopik] = useState('Unggah-Ungguh Basa & Tembang Macapat');
+  const [materiTopik, setMateriTopik] = useState(activeMateri || 'Unggah-Ungguh Basa & Tembang Macapat');
   const [loadingAi, setLoadingAi] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (activeMateri) {
+      setMateriTopik(activeMateri);
+    }
+  }, [activeMateri]);
 
   const activeIndex = Math.max(
     0,

@@ -364,20 +364,18 @@ Kembalikan JSON object:
 Identitas Saat Ini: ${JSON.stringify(payload.identitas)}
 Nama File: ${payload.fileName || '-'}
 Isi Dokumen yang Di-upload:
-${String(payload.rawText || '').slice(0, 24000)}
+${String(payload.rawText || '').slice(0, 26000)}
 
 Tugas Anda:
-1. Deteksi jika dokumen menyebut Fase/Kelas/Tahun Pelajaran/Satuan Pendidikan (jika tidak disebut, pertahankan identitas saat ini).
-2. Ekstrak seluruh Elemen dan Capaian Pembelajaran (CP) Bahasa Jawa dari dokumen.
-3. Ekstrak seluruh Tujuan Pembelajaran (TP) dari dokumen (atau turunkan secara akurat jika dokumen hanya berisi CP) lengkap dengan Bab, Elemen, CP, TP, Semester ("Gasal" / "Genap").
-4. Lengkapi data ATP untuk tiap TP: lingkupMateri (topik spesifik Bahasa Jawa), dimensiProfilLulusan (pilih 2-3 dari: "Keimanan dan Ketaqwaan", "Kewargaan", "Penalaran Kritis", "Kreativitas", "Kolaborasi", "Kemandirian", "Komunikasi"), dan waktuJp (estimasi JP realistis, total setahun sekitar 40-64 JP untuk mapel Bahasa Jawa 2 JP/minggu).
-5. Buatkan deskripsi KKTP (perluBimbingan, cukup, baik, sangatBaik) untuk setiap TP.
+1. Deteksi jika dokumen menyebut Fase ("A", "B", atau "C") / Kelas ("1"-"6") / Tahun Pelajaran.
+2. Ekstrak seluruh Elemen dan Capaian Pembelajaran (CP) Bahasa Jawa serta Tujuan Pembelajaran (TP) untuk Fase & Kelas aktif saat ini (atau seluruh Fase A/B/C & Kelas 1-6 yang terdapat di dokumen ke dalam "profilesByKey" dengan key seperti "A_1", "A_2", "B_3", "B_4", "C_5", "C_6", atau "A", "B", "C" bila hanya menyebut Fase!).
+3. Untuk setiap TP, lengkapi: bab, elemen, cp, tp, semester ("Gasal" | "Genap"), lingkupMateri, dimensiProfilLulusan (pilih 2-3 dari: "Keimanan dan Ketaqwaan", "Kewargaan", "Penalaran Kritis", "Kreativitas", "Kolaborasi", "Kemandirian", "Komunikasi"), waktuJp (estimasi JP realistis), dan kktp (kodeTp, perluBimbingan, cukup, baik, sangatBaik).
 
 Kembalikan JSON object persis dengan struktur:
 {
   "detectedIdentitas": {
-    "fase": "opsional jika ada di dokumen",
-    "kelas": "opsional jika ada di dokumen",
+    "fase": "A | B | C (opsional)",
+    "kelas": "1 | 2 | 3 | 4 | 5 | 6 (opsional)",
     "tahunPelajaran": "opsional jika ada di dokumen"
   },
   "cpElements": [
@@ -401,6 +399,200 @@ Kembalikan JSON object persis dengan struktur:
         "baik": "...",
         "sangatBaik": "..."
       }
+    }
+  ],
+  "profilesByKey": {
+    "C_5": {
+      "cpElements": [{ "elemen": "...", "capaianPembelajaran": "..." }],
+      "tpRows": []
+    }
+  }
+}`;
+        break;
+      }
+
+      case 'modul_sync_cascade': {
+        const jFormatif = Math.min(Math.max(1, Number(payload.jumlahSoalFormatif) || 5), 15);
+        const jSumatif = Math.min(Math.max(1, Number(payload.jumlahSoalSumatif) || 5), 15);
+        prompt = `Anda harus menyinkronkan pembahasan secara seragam dan menyeluruh ke 4 bagian perangkat pembelajaran Bahasa Jawa berdasarkan pilihan guru pada Menu Modul Ajar:
+- Identitas: ${JSON.stringify(payload.identitas)}
+- Model Pembelajaran: ${payload.modelPembelajaran}
+- Sintak Model yang WAJIB diikuti persis urutannya: ${JSON.stringify(payload.sintaks)}
+- Capaian Pembelajaran (CP): ${payload.capaianPembelajaran}
+- Tujuan Pembelajaran (TP): ${payload.tujuanPembelajaran}
+- Bab / Lingkup Materi: ${payload.bab || payload.materiPelajaran}
+- Materi Pelajaran Dipilih: ${payload.materiPelajaran}
+- Alokasi Waktu: ${payload.alokasiWaktu}
+- Jenis Soal Formatif Dipilih: ${JSON.stringify(payload.jenisFormatif || ['Pilihan Ganda ABCD', 'Pilihan Ganda Kompleks / MCMA', 'Essay'])}
+- Jumlah Soal Formatif: ${jFormatif}
+- Jumlah Soal Sumatif: ${jSumatif}
+
+Kembalikan SATU JSON object persis dengan skema berikut agar Format Modul Ajar, Materi Ajar, Soal Formatif & Sumatif, dan Format Penilaian langsung menyesuaikan pembahasan "${payload.materiPelajaran}":
+{
+  "modulAjar": {
+    "kesiapanMurid": "Kesiapan murid & diferensiasi visual/kinestetik/auditori spesifik materi ${payload.materiPelajaran}...",
+    "karakteristikMateri": "Karakteristik materi (faktual, konseptual, prosedural, metakognitif)...",
+    "dimensiChecklist": {
+      "penalaranKritis": { "checked": true, "deskripsi": "..." },
+      "kreativitas": { "checked": true, "deskripsi": "..." },
+      "kolaborasi": { "checked": true, "deskripsi": "..." },
+      "kemandirian": { "checked": false, "deskripsi": "..." },
+      "komunikasi": { "checked": true, "deskripsi": "..." },
+      "keimanan": { "checked": false, "deskripsi": "..." },
+      "kewargaan": { "checked": true, "deskripsi": "..." }
+    },
+    "capaianPembelajaran": "${payload.capaianPembelajaran}",
+    "tujuanPembelajaran": "TP ABCD level C4-C6 SOLO untuk materi ${payload.materiPelajaran}...",
+    "praktikPedagogis": {
+      "pendekatan": "...",
+      "metode": "..."
+    },
+    "lingkunganKemitraan": {
+      "budayaBelajar": "...",
+      "ruangFisik": "...",
+      "kemitraanAntarmurid": "..."
+    },
+    "pemanfaatanDigital": {
+      "platform": "...",
+      "perangkat": "...",
+      "mediaBahanAjar": "..."
+    },
+    "pendahuluan": ["...", "...", "...", "..."],
+    "alokasiPendahuluan": "10 Menit",
+    "intiSintaks": [
+      {
+        "sintakTitle": "Sintak sesuai daftar sintaks...",
+        "deepLearningTag": "DEEP LEARNING - ...",
+        "aktivitas": ["Aktivitas spesifik materi ${payload.materiPelajaran}...", "..."]
+      }
+    ],
+    "alokasiInti": "50 Menit",
+    "penutup": ["...", "...", "..."],
+    "alokasiPenutup": "10 Menit",
+    "asesmenFormatif": ["...", "..."],
+    "asesmenSumatif": "..."
+  },
+  "materiAjar": {
+    "judulMateri": "${payload.materiPelajaran}",
+    "bab": "${payload.bab || payload.materiPelajaran}",
+    "tujuanPembelajaran": "...",
+    "petaKonsep": {
+      "pusat": "${payload.materiPelajaran}",
+      "cabang": [
+        { "judul": "...", "poin": ["...", "..."] },
+        { "judul": "...", "poin": ["...", "..."] },
+        { "judul": "...", "poin": ["...", "..."] }
+      ]
+    },
+    "paragrafRingkasan": ["Paragraf 1...", "Paragraf 2...", "Paragraf 3..."],
+    "kosakataPenting": [
+      { "ngoko": "...", "krama": "...", "arti": "..." },
+      { "ngoko": "...", "krama": "...", "arti": "..." },
+      { "ngoko": "...", "krama": "...", "arti": "..." },
+      { "ngoko": "...", "krama": "...", "arti": "..." }
+    ],
+    "contohKontekstual": "Contoh teks/dialog/tembang/aksara Bahasa Jawa otentik..."
+  },
+  "soalFormatif": {
+    "kktp": "KKTP formatif spesifik materi ${payload.materiPelajaran}...",
+    "kisiKisi": [
+      {
+        "no": 1,
+        "tp": "...",
+        "materi": "${payload.materiPelajaran}",
+        "indikatorSoal": "...",
+        "levelKognitif": "C4 (Menganalisis)",
+        "bentukSoal": "Pilihan Ganda ABCD",
+        "noSoal": "1"
+      }
+    ],
+    "soal": [
+      {
+        "no": 1,
+        "bentuk": "Pilihan Ganda ABCD",
+        "pertanyaan": "...",
+        "opsi": ["A. ...", "B. ...", "C. ...", "D. ..."],
+        "kunciJawaban": "A",
+        "skorMaksimal": 20,
+        "pedomanPenskoran": "..."
+      }
+    ],
+    "pedomanUmum": "Nilai = (Total Skor / Skor Maksimal) x 100. Tuntas >= 76."
+  },
+  "soalSumatif": {
+    "kktp": "KKTP sumatif spesifik materi ${payload.materiPelajaran}...",
+    "kisiKisi": [
+      {
+        "no": 1,
+        "tp": "...",
+        "materi": "${payload.materiPelajaran}",
+        "indikatorSoal": "...",
+        "levelKognitif": "C4 / C5",
+        "bentukSoal": "Pilihan Ganda ABCD",
+        "noSoal": "1"
+      }
+    ],
+    "soal": [
+      {
+        "no": 1,
+        "bentuk": "Pilihan Ganda ABCD",
+        "pertanyaan": "...",
+        "opsi": ["A. ...", "B. ...", "C. ...", "D. ..."],
+        "kunciJawaban": "A",
+        "skorMaksimal": 20,
+        "pedomanPenskoran": "..."
+      }
+    ],
+    "pedomanUmum": "Nilai Sumatif = (Skor Perolehan / Skor Maksimal) x 100."
+  },
+  "penilaianUpdates": [
+    {
+      "id": "rubrik_lkpd",
+      "deskripsi": "Menilai analisis dan penerapan ${payload.materiPelajaran}...",
+      "baris": [
+        ["Aspek 1 spesifik materi...", "Sangat Baik...", "Baik...", "Cukup...", "Perlu Bimbingan..."],
+        ["Aspek 2 spesifik materi...", "Sangat Baik...", "Baik...", "Cukup...", "Perlu Bimbingan..."],
+        ["Kelengkapan & Kerapian Produk", "...", "...", "...", "..."]
+      ],
+      "catatan": "Nilai = (Skor Perolehan / 12) x 100."
+    },
+    {
+      "id": "rubrik_studi_kasus",
+      "deskripsi": "Menilai pemecahan kasus terkait ${payload.materiPelajaran}...",
+      "baris": [
+        ["Identifikasi Kasus ${payload.materiPelajaran}", "...", "...", "...", "..."],
+        ["Argumentasi & Solusi C5-C6", "...", "...", "...", "..."]
+      ]
+    },
+    {
+      "id": "rubrik_simulasi",
+      "deskripsi": "Menilai unjuk kerja / praktik terkait ${payload.materiPelajaran}...",
+      "baris": [
+        ["Pelafalan & Intonasi", "...", "...", "...", "..."],
+        ["Penguasaan ${payload.materiPelajaran}", "...", "...", "...", "..."]
+      ]
+    },
+    {
+      "id": "analisis_penilaian",
+      "baris": [
+        ["1", "TP 1 (${payload.materiPelajaran})", "25", "28", "89.3%", "Diterima / Tuntas"],
+        ["2", "TP 2 (Penerapan ${payload.materiPelajaran})", "22", "28", "78.6%", "Diterima / Tuntas"]
+      ]
+    },
+    {
+      "id": "tindak_lanjut",
+      "baris": [
+        ["Sebagian murid perlu pendampingan pada aspek ${payload.materiPelajaran}.", "Kurangnya latihan kontekstual.", "Pendampingan kelompok kecil dengan contoh ${payload.materiPelajaran}.", "Pertemuan Berikutnya", "Guru Mata Pelajaran"]
+      ]
+    },
+    {
+      "id": "refleksi_akhir_bab",
+      "deskripsi": "Evaluasi holistik pembelajaran ${payload.materiPelajaran}.",
+      "baris": [
+        ["Ketercapaian Tujuan", "Apakah seluruh murid mencapai TP ${payload.materiPelajaran}?", "Mayoritas murid memahami konsep dan penerapannya."],
+        ["Kegembiraan & Kebermaknaan", "Kegiatan apa yang paling bermakna saat belajar ${payload.materiPelajaran}?", "Diskusi kelompok dan presentasi karya berjalan antusias."],
+        ["Perbaikan Pertemuan Berikutnya", "Penyesuaian media apa yang dibutuhkan?", "Menambah stimulus audio/visual terkait ${payload.materiPelajaran}."]
+      ]
     }
   ]
 }`;

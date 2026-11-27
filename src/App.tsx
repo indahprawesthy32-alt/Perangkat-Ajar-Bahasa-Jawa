@@ -23,6 +23,13 @@ import {
 import { DEFAULT_STATE } from './data/defaultData';
 import type { AppState, IdentitasSekolah, MenuId } from './types';
 import { exportMenuDocument, MENU_LABELS } from './utils/fileEngine';
+import {
+  cascadeAllMenusFromCpTp,
+  normalizeFase,
+  normalizeKelas,
+  switchFaseOrKelasAndSync,
+  syncDownstreamFromAtp,
+} from './utils/curriculumSync';
 import { IdentitasProvider } from './context/IdentitasContext';
 import { Menu1AnalisisCp } from './components/Menu1AnalisisCp';
 import { Menu2Atp } from './components/Menu2Atp';
@@ -59,7 +66,50 @@ export default function App() {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
-        return { ...DEFAULT_STATE, ...JSON.parse(saved) };
+        const parsed = JSON.parse(saved) as Partial<AppState>;
+        const firstTpId = parsed?.tpRows?.[0]?.id || '';
+        const isLegacyPreset =
+          firstTpId === 'tp1' ||
+          /^tp_[abc]_\d+$/.test(firstTpId) ||
+          parsed?.tpRows?.[0]?.bab === 'Bab 1: Crita Rakyat';
+
+        // Strip legacy uncustomized preset entries from cpLibrary so switching Fase/Kelas uses the new DIY presets
+        const cleanedLibrary = parsed.cpLibrary ? { ...parsed.cpLibrary } : undefined;
+        if (cleanedLibrary) {
+          for (const [k, entry] of Object.entries(cleanedLibrary)) {
+            const libFirstId = entry?.tpRows?.[0]?.id || '';
+            if (libFirstId === 'tp1' || /^tp_[abc]_\d+$/.test(libFirstId)) {
+              delete cleanedLibrary[k];
+            }
+          }
+        }
+
+        if (isLegacyPreset) {
+          const mergedIdentitas: IdentitasSekolah = {
+            ...DEFAULT_STATE.identitas,
+            ...(parsed.identitas || {}),
+          };
+          const base: AppState = {
+            ...DEFAULT_STATE,
+            identitas: mergedIdentitas,
+            cpLibrary: cleanedLibrary,
+          };
+          const f = normalizeFase(mergedIdentitas.fase);
+          const k = normalizeKelas(mergedIdentitas.kelas);
+          if (f !== 'C' || k !== '5') {
+            return switchFaseOrKelasAndSync(
+              { ...base, identitas: { ...mergedIdentitas, fase: 'C', kelas: '5' } },
+              { fase: f, kelas: k },
+            );
+          }
+          return base;
+        }
+
+        return {
+          ...DEFAULT_STATE,
+          ...parsed,
+          ...(cleanedLibrary ? { cpLibrary: cleanedLibrary } : {}),
+        };
       }
     } catch {
       // Fallback to default state
@@ -76,10 +126,7 @@ export default function App() {
   const [confirmReset, setConfirmReset] = useState(false);
 
   const updateIdentitas = (patch: Partial<IdentitasSekolah>) => {
-    setState((prev) => ({
-      ...prev,
-      identitas: { ...prev.identitas, ...patch },
-    }));
+    setState((prev) => switchFaseOrKelasAndSync(prev, patch));
   };
 
   useEffect(() => {
@@ -320,31 +367,41 @@ export default function App() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
                 <div>
-                  <label className="block text-[11px] font-medium text-slate-600 mb-1">Kelas</label>
+                  <label className="block text-[11px] font-medium text-slate-600 mb-1">Tahun Ajaran (Ketik Manual)</label>
                   <input
                     type="text"
-                    value={state.identitas.kelas}
-                    onChange={(e) => updateIdentitas({ kelas: e.target.value })}
-                    className="w-full border border-slate-300 rounded px-2.5 py-1.5"
+                    value={state.identitas.tahunPelajaran}
+                    onChange={(e) => updateIdentitas({ tahunPelajaran: e.target.value })}
+                    placeholder="Contoh: 2026/2027"
+                    className="w-full font-mono border border-slate-300 rounded px-2.5 py-1.5"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-medium text-slate-600 mb-1">Fase</label>
-                  <input
-                    type="text"
-                    value={state.identitas.fase}
+                  <label className="block text-[11px] font-medium text-slate-600 mb-1">Fase (A / B / C)</label>
+                  <select
+                    value={normalizeFase(state.identitas.fase)}
                     onChange={(e) => updateIdentitas({ fase: e.target.value })}
-                    className="w-full border border-slate-300 rounded px-2.5 py-1.5"
-                  />
+                    className="w-full border border-slate-300 rounded px-2.5 py-1.5 bg-white"
+                  >
+                    <option value="A">Fase A (Kelas 1–2)</option>
+                    <option value="B">Fase B (Kelas 3–4)</option>
+                    <option value="C">Fase C (Kelas 5–6)</option>
+                  </select>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-medium text-slate-600 mb-1">Semester</label>
-                  <input
-                    type="text"
-                    value={state.identitas.semester}
-                    onChange={(e) => updateIdentitas({ semester: e.target.value })}
-                    className="w-full border border-slate-300 rounded px-2.5 py-1.5"
-                  />
+                  <label className="block text-[11px] font-medium text-slate-600 mb-1">Kelas (1–6)</label>
+                  <select
+                    value={normalizeKelas(state.identitas.kelas)}
+                    onChange={(e) => updateIdentitas({ kelas: e.target.value })}
+                    className="w-full border border-slate-300 rounded px-2.5 py-1.5 bg-white"
+                  >
+                    <option value="1">Kelas 1</option>
+                    <option value="2">Kelas 2</option>
+                    <option value="3">Kelas 3</option>
+                    <option value="4">Kelas 4</option>
+                    <option value="5">Kelas 5</option>
+                    <option value="6">Kelas 6</option>
+                  </select>
                 </div>
                 <div>
                   <label className="block text-[11px] font-medium text-slate-600 mb-1">Tanggal Pembuatan</label>
@@ -401,8 +458,16 @@ export default function App() {
               identitas={state.identitas}
               cpElements={state.cpElements}
               tpRows={state.tpRows}
-              onChangeCp={(cpElements) => setState({ ...state, cpElements })}
-              onChangeTp={(tpRows) => setState({ ...state, tpRows })}
+              onChangeCp={(cpElements) =>
+                setState((prev) =>
+                  cascadeAllMenusFromCpTp(prev, cpElements, prev.tpRows, undefined, undefined, undefined, true),
+                )
+              }
+              onChangeTp={(tpRows) =>
+                setState((prev) =>
+                  cascadeAllMenusFromCpTp(prev, prev.cpElements, tpRows, undefined, undefined, undefined, true),
+                )
+              }
               onUpdateFullState={setState}
             />
           )}
@@ -412,7 +477,7 @@ export default function App() {
               identitas={state.identitas}
               tpRows={state.tpRows}
               atpRows={state.atpRows}
-              onChangeAtp={(atpRows) => setState({ ...state, atpRows })}
+              onChangeAtp={(atpRows) => setState((prev) => syncDownstreamFromAtp(prev, atpRows))}
             />
           )}
 
@@ -456,11 +521,14 @@ export default function App() {
 
           {activeMenu === 'modul_ajar' && (
             <Menu7ModulAjar
+              fullState={state}
               identitas={state.identitas}
               modul={state.modulAjar}
               tpRows={state.tpRows}
               atpRows={state.atpRows}
               onChange={(modulAjar) => setState({ ...state, modulAjar })}
+              onUpdateFullState={setState}
+              onNavigateMenu={setActiveMenu}
             />
           )}
 
@@ -499,6 +567,7 @@ export default function App() {
             <Menu11Penilaian
               identitas={state.identitas}
               penilaianList={state.penilaianList}
+              activeMateri={state.modulAjar.materiPelajaran}
               onChange={(penilaianList) => setState({ ...state, penilaianList })}
             />
           )}
@@ -509,7 +578,7 @@ export default function App() {
         open={identitasOpen}
         identitas={state.identitas}
         onClose={() => setIdentitasOpen(false)}
-        onChange={(identitas) => setState({ ...state, identitas })}
+        onPatch={updateIdentitas}
       />
 
       <ExportModal

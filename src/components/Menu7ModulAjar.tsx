@@ -1,17 +1,28 @@
 import { useState } from 'react';
-import { Sparkles, Loader2, CheckSquare, Square } from 'lucide-react';
-import type { AtpRow, IdentitasSekolah, ModelPembelajaranId, ModulAjarState, TpRow } from '../types';
+import { Sparkles, Loader2, CheckSquare, Square, RefreshCw, ArrowRight } from 'lucide-react';
+import type { AppState, AtpRow, IdentitasSekolah, MenuId, ModelPembelajaranId, ModulAjarState, TpRow } from '../types';
 import { MODEL_PEMBELAJARAN_META } from '../data/defaultData';
 import { generateWithAi } from '../utils/apiClient';
 import { useIdentitas } from '../context/IdentitasContext';
+import {
+  applyAiModulCascadeResult,
+  normalizeFase,
+  normalizeKelas,
+  syncFromModulSelection,
+  type ModulSyncCascadeAiPayload,
+  type ModulSyncTargets,
+} from '../utils/curriculumSync';
 import { SignatureBlock } from './DocumentHeader';
 
 interface Props {
+  fullState?: AppState;
   identitas: IdentitasSekolah;
   modul: ModulAjarState;
   tpRows: TpRow[];
   atpRows: AtpRow[];
   onChange: (next: ModulAjarState) => void;
+  onUpdateFullState?: (next: AppState) => void;
+  onNavigateMenu?: (menuId: MenuId) => void;
 }
 
 const MODEL_OPTIONS: Array<{ id: ModelPembelajaranId; label: string }> = [
@@ -32,13 +43,70 @@ const DIMENSI_KEYS: Array<{ key: keyof ModulAjarState['dimensiChecklist']; label
   { key: 'kewargaan', label: 'Kewargaan' },
 ];
 
-export function Menu7ModulAjar({ identitas, modul, tpRows, atpRows, onChange }: Props) {
+export function Menu7ModulAjar({
+  fullState,
+  identitas,
+  modul,
+  tpRows,
+  atpRows,
+  onChange,
+  onUpdateFullState,
+  onNavigateMenu,
+}: Props) {
   const ctx = useIdentitas();
   const [loadingAi, setLoadingAi] = useState(false);
+  const [loadingSyncAi, setLoadingSyncAi] = useState(false);
+  const [autoSync, setAutoSync] = useState(true);
+  const [selectedTpId, setSelectedTpId] = useState('');
+  const [syncTargets, setSyncTargets] = useState<ModulSyncTargets>({
+    modul: true,
+    materi: true,
+    soal: true,
+    penilaian: true,
+  });
+  const [syncStatus, setSyncStatus] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const selectedTpIndex = tpRows.findIndex((t) => t.id === selectedTpId);
+  const selectedTp = selectedTpIndex >= 0 ? tpRows[selectedTpIndex] : undefined;
+
+  const getSyncedMenuLabelList = () => {
+    const labels: string[] = [];
+    if (syncTargets.modul) labels.push('Format Modul Ajar');
+    if (syncTargets.materi) labels.push('Materi Ajar');
+    if (syncTargets.soal) labels.push('Soal Formatif & Sumatif');
+    if (syncTargets.penilaian) labels.push('Format Penilaian');
+    return labels.join(', ');
+  };
+
+  const runInstantCascade = (patch: {
+    materiPelajaran?: string;
+    alokasiWaktu?: string;
+    capaianPembelajaran?: string;
+    tujuanPembelajaran?: string;
+    bab?: string;
+    modelPembelajaran?: ModelPembelajaranId;
+    tpIndex?: number;
+  }) => {
+    if (!fullState || !onUpdateFullState) {
+      return false;
+    }
+    const syncedState = syncFromModulSelection(fullState, {
+      ...patch,
+      targets: syncTargets,
+    });
+    onUpdateFullState(syncedState);
+    return true;
+  };
 
   const handleSelectModel = (modelId: ModelPembelajaranId) => {
     const meta = MODEL_PEMBELAJARAN_META[modelId];
+    if (autoSync && runInstantCascade({ modelPembelajaran: modelId, tpIndex: selectedTpIndex })) {
+      setSyncStatus(
+        `Model ${meta.shortLabel} & pembahasan "${modul.materiPelajaran}" otomatis disinkronkan ke: ${getSyncedMenuLabelList()}.`,
+      );
+      return;
+    }
     onChange({
       ...modul,
       modelPembelajaran: modelId,
@@ -47,16 +115,90 @@ export function Menu7ModulAjar({ identitas, modul, tpRows, atpRows, onChange }: 
   };
 
   const handlePickImportedTp = (tpId: string) => {
+    setSelectedTpId(tpId);
     const idx = tpRows.findIndex((t) => t.id === tpId);
     if (idx === -1) return;
     const tp = tpRows[idx];
     const atp = atpRows[idx];
+    const materiBaru = atp?.lingkupMateri || tp.bab;
+    const alokasiBaru =
+      atp?.waktuJp && !modul.alokasiWaktu ? `${atp.waktuJp} JP` : modul.alokasiWaktu;
+
+    if (
+      autoSync &&
+      runInstantCascade({
+        materiPelajaran: materiBaru,
+        alokasiWaktu: alokasiBaru,
+        capaianPembelajaran: tp.cp,
+        tujuanPembelajaran: tp.tp,
+        bab: tp.bab,
+        tpIndex: idx,
+      })
+    ) {
+      setSyncStatus(
+        `CP/TP "${materiBaru}" (${alokasiBaru}) otomatis disinkronkan ke: ${getSyncedMenuLabelList()}.`,
+      );
+      return;
+    }
+
     onChange({
       ...modul,
-      materiPelajaran: atp?.lingkupMateri || tp.bab,
+      materiPelajaran: materiBaru,
+      alokasiWaktu: alokasiBaru,
       capaianPembelajaran: tp.cp,
       tujuanPembelajaran: tp.tp,
     });
+  };
+
+  const handleManualSyncNow = () => {
+    setErrorMsg(null);
+    if (
+      runInstantCascade({
+        materiPelajaran: modul.materiPelajaran,
+        alokasiWaktu: modul.alokasiWaktu,
+        capaianPembelajaran: modul.capaianPembelajaran,
+        tujuanPembelajaran: modul.tujuanPembelajaran,
+        bab: selectedTp?.bab,
+        modelPembelajaran: modul.modelPembelajaran,
+        tpIndex: selectedTpIndex,
+      })
+    ) {
+      setSyncStatus(
+        `Pembahasan "${modul.materiPelajaran}" (${modul.alokasiWaktu}) berhasil disinkronkan ke: ${getSyncedMenuLabelList()}.`,
+      );
+    }
+  };
+
+  const handleDeepSyncAi = async () => {
+    if (!fullState || !onUpdateFullState) return;
+    setLoadingSyncAi(true);
+    setErrorMsg(null);
+    setSyncStatus(null);
+    try {
+      const meta = MODEL_PEMBELAJARAN_META[modul.modelPembelajaran];
+      const aiRes = await generateWithAi<ModulSyncCascadeAiPayload>('modul_sync_cascade', {
+        identitas,
+        modelPembelajaran: meta.label,
+        sintaks: meta.sintaks.map((s) => s.sintakTitle),
+        capaianPembelajaran: modul.capaianPembelajaran,
+        tujuanPembelajaran: modul.tujuanPembelajaran,
+        bab: selectedTp?.bab || modul.materiPelajaran,
+        materiPelajaran: modul.materiPelajaran,
+        alokasiWaktu: modul.alokasiWaktu,
+        jenisFormatif: fullState.soalFormatif.jenisDipilih,
+        jumlahSoalFormatif: Math.min(fullState.soalFormatif.jumlahSoal || 5, 10),
+        jumlahSoalSumatif: Math.min(fullState.soalSumatif.jumlahSoal || 5, 10),
+      });
+      const updated = applyAiModulCascadeResult(fullState, aiRes, syncTargets);
+      onUpdateFullState(updated);
+      setSyncStatus(
+        `Sinkronisasi mendalam (AI) selesai! Pembahasan "${modul.materiPelajaran}" (${modul.alokasiWaktu}) pada ${getSyncedMenuLabelList()} telah diperbarui secara lengkap.`,
+      );
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : 'Gagal menyinkronkan pembahasan lintas menu.');
+    } finally {
+      setLoadingSyncAi(false);
+    }
   };
 
   const handleGenerateAi = async () => {
@@ -109,13 +251,13 @@ export function Menu7ModulAjar({ identitas, modul, tpRows, atpRows, onChange }: 
               Konfigurasi Modul Ajar Deep Learning (Taksonomi SOLO C4–C6)
             </h3>
             <p className="text-xs text-slate-600 mt-0.5">
-              Isikan materi, alokasi waktu, mata pelajaran, dan pilih model pembelajaran untuk langsung menautkan sintaknya ke bagian C. Pengalaman Belajar.
+              Pilih CP/TP terimpor, isikan materi, alokasi waktu, dan model pembelajaran untuk langsung menyesuaikan pembahasan di Modul Ajar, Materi Ajar, Soal Formatif &amp; Sumatif, serta Format Penilaian.
             </p>
           </div>
           <button
             type="button"
             onClick={handleGenerateAi}
-            disabled={loadingAi}
+            disabled={loadingAi || loadingSyncAi}
             className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#1B4353] hover:bg-[#143340] disabled:opacity-60 rounded-md transition-colors whitespace-nowrap shrink-0"
           >
             {loadingAi ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
@@ -129,12 +271,12 @@ export function Menu7ModulAjar({ identitas, modul, tpRows, atpRows, onChange }: 
               Ambil Otomatis dari CP / TP Terimpor
             </label>
             <select
-              defaultValue=""
+              value={selectedTpId}
               onChange={(e) => handlePickImportedTp(e.target.value)}
               className="w-full text-xs bg-slate-50 border border-slate-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#1B4353]"
             >
               <option value="" disabled>
-                -- Pilih Bab / TP dari Analisis CP untuk diterapkan ke Modul Ajar --
+                -- Pilih Bab / TP dari Analisis CP untuk diterapkan ke Modul, Materi, Soal &amp; Penilaian --
               </option>
               {tpRows.map((t, idx) => (
                 <option key={t.id} value={t.id}>
@@ -160,7 +302,13 @@ export function Menu7ModulAjar({ identitas, modul, tpRows, atpRows, onChange }: 
             <input
               type="text"
               value={modul.materiPelajaran}
-              onChange={(e) => onChange({ ...modul, materiPelajaran: e.target.value })}
+              onChange={(e) => {
+                const nextMateri = e.target.value;
+                if (autoSync && runInstantCascade({ materiPelajaran: nextMateri, tpIndex: selectedTpIndex })) {
+                  return;
+                }
+                onChange({ ...modul, materiPelajaran: nextMateri });
+              }}
               placeholder="Contoh: Tembang Macapat Pangkur / Aksara Jawa"
               className="w-full text-sm border border-slate-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#1B4353]"
             />
@@ -170,7 +318,13 @@ export function Menu7ModulAjar({ identitas, modul, tpRows, atpRows, onChange }: 
             <input
               type="text"
               value={modul.alokasiWaktu}
-              onChange={(e) => onChange({ ...modul, alokasiWaktu: e.target.value })}
+              onChange={(e) => {
+                const nextAlokasi = e.target.value;
+                if (autoSync && runInstantCascade({ alokasiWaktu: nextAlokasi, tpIndex: selectedTpIndex })) {
+                  return;
+                }
+                onChange({ ...modul, alokasiWaktu: nextAlokasi });
+              }}
               placeholder="2 x 35 Menit (1 Pert)"
               className="w-full text-sm border border-slate-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#1B4353]"
             />
@@ -201,7 +355,107 @@ export function Menu7ModulAjar({ identitas, modul, tpRows, atpRows, onChange }: 
             })}
           </div>
         </div>
+
+        {/* Menu Sinkronisasi Lintas Menu */}
+        <div className="border-t border-slate-200 pt-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+                Menu Sinkronisasi Pembahasan (Modul, Materi, Soal &amp; Penilaian)
+              </h4>
+              <p className="text-[11px] text-slate-600 mt-0.5">
+                Menyesuaikan pembahasan pada menu terpilih berdasarkan CP/TP, Materi Pelajaran, dan Alokasi Waktu di atas.
+              </p>
+            </div>
+            <label className="inline-flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={autoSync}
+                onChange={(e) => setAutoSync(e.target.checked)}
+                className="rounded border-slate-300 text-[#1B4353] focus:ring-[#1B4353]"
+              />
+              <span>Auto-Sinkron Otomatis</span>
+            </label>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-md p-3">
+            <div className="flex flex-wrap items-center gap-4 text-xs">
+              {(
+                [
+                  { key: 'modul', label: 'Format Modul Ajar' },
+                  { key: 'materi', label: 'Materi Ajar' },
+                  { key: 'soal', label: 'Soal Formatif & Sumatif' },
+                  { key: 'penilaian', label: 'Format Penilaian' },
+                ] as const
+              ).map((item) => (
+                <label key={item.key} className="inline-flex items-center gap-1.5 font-medium text-slate-800 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={syncTargets[item.key]}
+                    onChange={(e) =>
+                      setSyncTargets((prev) => ({ ...prev, [item.key]: e.target.checked }))
+                    }
+                    className="rounded border-slate-300 text-[#1B4353] focus:ring-[#1B4353]"
+                  />
+                  <span>{item.label}</span>
+                </label>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleManualSyncNow}
+                disabled={loadingSyncAi}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#1B4353] bg-white hover:bg-slate-100 border border-slate-300 rounded-md transition-colors whitespace-nowrap shrink-0"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Sinkronkan Sekarang
+              </button>
+              <button
+                type="button"
+                onClick={handleDeepSyncAi}
+                disabled={loadingSyncAi || loadingAi}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-[#1B4353] hover:bg-[#143340] disabled:opacity-60 rounded-md transition-colors whitespace-nowrap shrink-0"
+              >
+                {loadingSyncAi ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                {loadingSyncAi ? 'Menyinkronkan Semua Menu...' : 'Sinkron Pembahasan Lengkap (AI)'}
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
+
+      {syncStatus && (
+        <div className="no-print p-3 text-xs text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-md flex flex-wrap items-center justify-between gap-2">
+          <span>{syncStatus}</span>
+          {onNavigateMenu && (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => onNavigateMenu('materi_ajar')}
+                className="inline-flex items-center gap-1 font-semibold text-[#1B4353] hover:underline"
+              >
+                Materi Ajar <ArrowRight className="w-3 h-3" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigateMenu('soal')}
+                className="inline-flex items-center gap-1 font-semibold text-[#1B4353] hover:underline"
+              >
+                Soal <ArrowRight className="w-3 h-3" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigateMenu('penilaian')}
+                className="inline-flex items-center gap-1 font-semibold text-[#1B4353] hover:underline"
+              >
+                Penilaian <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {errorMsg && (
         <div className="no-print p-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded-md">
@@ -249,21 +503,30 @@ export function Menu7ModulAjar({ identitas, modul, tpRows, atpRows, onChange }: 
             <span>:</span>
             {ctx ? (
               <div className="flex items-center gap-1 min-w-0 font-semibold text-slate-900">
-                <input
-                  type="text"
+                <select
                   aria-label="Kelas"
-                  value={ctx.identitas.kelas}
+                  value={normalizeKelas(ctx.identitas.kelas)}
                   onChange={(e) => ctx.updateIdentitas({ kelas: e.target.value })}
-                  className="w-12 text-center bg-transparent border-b border-slate-300 focus:border-[#1B4353] focus:bg-white focus:outline-none px-1 py-0.5 print:border-none"
-                />
+                  className="bg-transparent border-b border-slate-300 focus:border-[#1B4353] focus:bg-white focus:outline-none px-1 py-0.5 cursor-pointer print:appearance-none print:border-none"
+                >
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                  <option value="5">5</option>
+                  <option value="6">6</option>
+                </select>
                 <span>/</span>
-                <input
-                  type="text"
+                <select
                   aria-label="Fase"
-                  value={ctx.identitas.fase}
+                  value={normalizeFase(ctx.identitas.fase)}
                   onChange={(e) => ctx.updateIdentitas({ fase: e.target.value })}
-                  className="w-12 text-center bg-transparent border-b border-slate-300 focus:border-[#1B4353] focus:bg-white focus:outline-none px-1 py-0.5 print:border-none"
-                />
+                  className="bg-transparent border-b border-slate-300 focus:border-[#1B4353] focus:bg-white focus:outline-none px-1 py-0.5 cursor-pointer print:appearance-none print:border-none"
+                >
+                  <option value="A">A</option>
+                  <option value="B">B</option>
+                  <option value="C">C</option>
+                </select>
                 <span>/</span>
                 <input
                   type="text"
